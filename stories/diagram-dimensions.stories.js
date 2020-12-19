@@ -12,5 +12,5 @@ storiesOf("Diagram", module).add("Diagram dimensions", () => ({
       model: diagramModel
     };
   },
-  template: `<diagram :model="model" width="200" height="200"></diagram>`
+  template: `<diagram :model="model" width="1200" height="800"></diagram>`
 }));

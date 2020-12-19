@@ -1,60 +1,30 @@
 <template>
   <svg :x="x" :y="y">
-    <rect
-      :fill="color"
-      stroke="#000000"
-      :stroke-width="selected ? 2 : 0"
-      x="5" y="15"
-      rx="3" ry="3"
-      :width="width" :height="height"
-      class="node-dark-background">
-    </rect>
-    <svg
-      x="0" y="0"
-      @mousedown="mouseDown"
-      @mouseenter="mouseenter"
-      @mouseleave="mouseleave">
+    <g>
       <rect
-        fill="#000000"
-        :fill-opacity="titleFillOpacity"
-        x="7" y="17"
-        rx="3" ry="3"
-        :width="width-4" height="16"
-        class="node-dark-background"
-        >
+        @mousedown="mouseDown"
+        filter="url(#NodeEffect)"
+        fill="#000"
+        fill-opacity="0.6"
+        x="5" y="15" 
+        :rx="rconner" :ry="rconner"
+        :width="width" :height="height"
+        class="node-dark-background">
       </rect>
-      <text :x="10" :y="30" font-size="14" font-weight="bold" fill="#000000">{{title}}</text>
-      <g v-if="deletable" @click="deleteNode">
-        <rect
-          :x="width - 12"
-          y="18"
-          width="14"
-          height="14"
-          rx="2" ry="2"
-          fill="#ffffff"
-          :fill-opacity="0.25"/>
-        <line
-          :x1="width" :y1="20"
-          :x2="width - 10" :y2="30"
-          style="stroke:rgb(0,0,0);"
-          stroke-width="2"
-        />
-        <line
-          :x1="width - 10" :y1="20"
-          :x2="width" :y2="30"
-          style="stroke:rgb(0,0,0);"
-          stroke-width="2"
-        />
-      </g>
-    </svg>
-    <rect
-      fill="#ffffff"
-      x="7" y="35"
-      rx="3" ry="3"
-      :width="width-4" :height="height - 22"
-      class="node-light-background">
-    </rect>
-    <slot></slot>
+
+      <!-- Titlebar -->
+      <svg x=5 y=15 @mousedown="mouseDown">
+        <path fill-rule="evenodd" :fill="color" :fill-opacity="titleFillOpacity"
+          :d="`M${rconner},0 L${width-rconner},0 A${rconner},${rconner} 0 0 1 ${width},${rconner} L${width},32 L-0,32 L-0,${rconner} A${rconner},${rconner} 0 0 1 ${rconner},0 Z`"/>
+        <text :x="10" :y="22" font-size="11pt" font-weight="600" fill="#fff">{{title}}</text>
+      </svg>
+
+      <slot></slot>
+
+      <!-- Select effect -->
+      <rect fill="none" stroke="#e17e4e" stroke-width="5" v-if="selected" x="3" y="13" :rx="rconner+1" :ry="rconner+1" :width="width+4" :height="height+4"/>
+
+    </g>
   </svg>
 </template>
 <script>
@@ -66,15 +36,10 @@ export default {
       type: String,
       required: true
     },
-    index: Number,
-    ports: {
-      type: Array,
-      default: () => {
-        return [];
-      }
-    },
+    id: Number,
     x: Number,
     y: Number,
+    type: String,
     width: {
       type: Number,
       default: 72
@@ -82,10 +47,6 @@ export default {
     height: {
       type: Number,
       default: 100
-    },
-    color: {
-      type: String,
-      default: "#66cc00"
     },
     deletable: {
       type: Boolean,
@@ -97,8 +58,15 @@ export default {
   data() {
     return {
       nodeStrokeWidth: 0,
-      titleFillOpacity: 0.25
+      titleFillOpacity: 0.9,
+      rconner: 5,
     };
+  },
+
+  computed: {
+    color() {
+      return { trigger: "#790000", flow: "#fbaf5d", expression: "#7b0046", utility: "#3cb878", action: "#005b7f" }[this.type]
+    } 
   },
 
   methods: {
@@ -109,19 +77,12 @@ export default {
     mouseDown: function(event) {
       this.$emit(
         "onStartDrag",
-        { type: "nodes", index: this.index },
+        { type: "node", id: this.id },
         event.x - this.x,
         event.y - this.y
       );
     },
 
-    mouseenter() {
-      this.titleFillOpacity = 0.5;
-    },
-
-    mouseleave() {
-      this.titleFillOpacity = 0.25;
-    }
   }
 };
 </script>

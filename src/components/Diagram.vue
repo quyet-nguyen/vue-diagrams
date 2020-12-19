@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div tabindex="-1" @keyup.ctrl.z.exact="undo" @keyup.ctrl.shift.z.exact="redo" >
    <SvgPanZoom
       :style="{ width: width + 'px', height: height + 'px', border:'1px solid black'}"
       xmlns="http://www.w3.org/2000/svg"
@@ -9,6 +9,7 @@
       :controlIconsEnabled="true"
       :fit="false"
       :center="true"
+      :dblClickZoomEnabled="false"
       viewportSelector="#svgroot2"
       :preventMouseEventsDefault="false"
       :beforePan="beforePan">
@@ -33,55 +34,65 @@
           <path d="M 80 0 L 0 0 0 80" fill="none" stroke="gray" stroke-width="1"/>
         </pattern>
       </defs>
+      <filter id="NodeEffect" filterUnits="objectBoundingBox" x="-10%" y="-10%" width="150%" height="150%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/>
+        <feOffset in="blur" dx="4" dy="4" result="offsetBlur"/>
+        <feSpecularLighting in="offsetBlur" surfaceScale="5" specularConstant=".75" specularExponent="20" lighting-color="#000" result="specOut">
+          <fePointLight x="-5000" y="-10000" z="20000"/>
+        </feSpecularLighting>
+        <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut2"/>
+        <feComposite in="SourceGraphic" in2="specOut2" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="litPaint" />
+        <feMerge>
+          <feMergeNode in="offsetBlur"/>
+          <feMergeNode in="litPaint"/>
+        </feMerge>
+      </filter>
 
       <rect x="-5000px" y="-5000px" width="10000px" height="10000px" fill="url(#grid)" @mousedown="clearSelection" ref="grid" class="svg-pan-zoom_viewport"/>
       <g ref="viewPort" id="viewport" x="50" y="50">
         <DiagramLink
-          :ref="'link-' + index"
-          :positionFrom="link.positionFrom"
-          :positionTo="link.positionTo"
-          :points="link.points"
+          :ref="'link-' + link.id"
+          :positionFrom="getPortHandlePosition(link.from)"
+          :positionTo="getPortHandlePosition(link.to)"
+          :type="model.findPort(link.to).type"
           :id="link.id"
-          :index="index"
-          v-for="(link, index) in model._model.links"
-          @onStartDrag="startDragPoint"
-          @onCreatePoint="createPoint"
+          v-for="link in model.getLinks()"
+          :key="'link-' + link.id"
         />
-        <line
-          :x1="getPortHandlePosition(newLink.startPortId).x"
-          :y1="getPortHandlePosition(newLink.startPortId).y"
-          :x2="convertXYtoViewPort(mouseX, 0).x"
-          :y2="convertXYtoViewPort(0, mouseY).y"
-          style="stroke:rgb(255,0,0);stroke-width:2"
-          v-if="newLink"
-        />
+        <path :d="newLinkPath" :stroke="newLinkStroke" stroke-width="3" fill="none" v-if="newLink"/>
         <DiagramNode
-          :ref="'node-' + nodeIndex"
+          :ref="'node-' + node.id"
           :title="node.title"
           :x="node.x"
           :y="node.y"
           :width="node.width"
           :height="node.height"
-          :color="node.color"
+          :type="node.type"
+          :subtype="node.subtype"
           :deletable="node.deletable"
-          :ports="node.ports"
-          :selected="selectedItem.type === 'nodes' && selectedItem.index === nodeIndex"
-          :index="nodeIndex"
-          v-for="(node, nodeIndex) in model._model.nodes"
+          :selected="selectedItem.type === 'node' && selectedItem.id === node.id"
+          :id="node.id"
+          v-for="node in model.getNodes()"
+          :key="'node-' + node.id"
           @onStartDrag="startDragItem"
           @delete="model.deleteNode(node)"
         >
           <DiagramPort
-            v-for="(port, portIndex) in node.ports"
+            v-for="port in model.getPorts(port => port.node_id == node.id)"
+            :key="'port-' + port.id"
             :ref="'port-' + port.id"
             :id="port.id"
-            :nodeIndex="nodeIndex"
-            :y="portIndex * 20"
+            :nodeId="node.id"
+            :handlePos="getPortHandlePosition(port.id, relative=true)"
             :nodeWidth="node.width"
             :type="port.type"
+            :direction="port.direction"
             :name="port.name"
+            :editable="port.editable"
             @onStartDragNewLink="startDragNewLink"
             @mouseUpPort="mouseUpPort"
+            @mouseEnterPort="mouseEnterPort"
+            @mouseLeavePort="mouseLeavePort"
           />
         </DiagramNode>
       </g>
@@ -96,6 +107,8 @@ import DiagramModel from "./../DiagramModel";
 import DiagramNode from "./DiagramNode";
 import DiagramLink from "./DiagramLink";
 import DiagramPort from "./DiagramPort";
+
+import {curve} from "../SVGUtils"
 
 var generateId = function() {
   return Math.trunc(Math.random() * 1000);
@@ -135,8 +148,6 @@ export default {
   },
 
   data() {
-    this.updateLinksPositions();
-
     return {
       document,
       zoomEnabled: true,
@@ -146,6 +157,7 @@ export default {
       initialDragX: 0,
       initialDragY: 0,
       newLink: undefined,
+      newLinkStroke: "black",
       mouseX: 0,
       mouseY: 0
     };
@@ -174,38 +186,8 @@ export default {
       else return true;
     },
 
-    createPoint(x, y, linkIndex, pointIndex) {
-      let coords = this.convertXYtoViewPort(x, y);
-      let links = this.model._model.links;
-
-      //FIXME works well only on links created at startup
-      if (links[linkIndex].points === undefined) links[linkIndex].points = [];
-
-      var points = links[linkIndex].points;
-      points.splice(pointIndex, 0, coords);
-      links[linkIndex].points = points;
-    },
-
     clearSelection() {
       this.selectedItem = {};
-    },
-
-    updateLinksPositions() {
-      var links = [];
-
-      if (this.model && this.model._model) links = this.model._model.links;
-
-      this.$nextTick(() => {
-        setTimeout(() => {
-          for (var i = 0; i < links.length; i++) {
-            var coords;
-            coords = this.getPortHandlePosition(links[i].from);
-            links[i].positionFrom = { x: coords.x, y: coords.y };
-            coords = this.getPortHandlePosition(links[i].to);
-            links[i].positionTo = { x: coords.x, y: coords.y };
-          }
-        }, 100);
-      });
     },
 
     startDragNewLink(startPortId) {
@@ -215,21 +197,19 @@ export default {
       };
     },
 
-    getPortHandlePosition(portId) {
-      if (this.$refs["port-" + portId]) {
-        var port = this.$refs["port-" + portId][0];
-        var node = this.$refs["node-" + port.nodeIndex][0];
-        var x;
-        var y;
-        if (port.type === "in") {
-          x = node.x + 10;
-          y = node.y + port.y + 64;
-        } else {
-          x = node.x + node.width + 10;
-          y = node.y + port.y + 64;
-        }
+    getPortHandlePosition(portId, relative=false) {
+      const port = this.model.findPort(portId)
+      if (port) {
+        const node = this.model.findNode(port.node_id)
+        const index = node[`${port.direction}ports`].indexOf(port.id)
+        
+        const pos = { 
+          x: port.direction === "in" ? 10 : node.width - 1, 
+          y: index*20 + 65 
+        };
+        if (relative) return pos
+        else return {x: pos.x + node.x, y: pos.y + node.y}
 
-        return { x, y };
       } else {
         console.warn(
           `port "${portId}" not found. you must call this method after the first render`
@@ -239,103 +219,48 @@ export default {
     },
 
     mouseMove(pos) {
-      var links = this.model._model.links;
       this.mouseX = pos.x;
       this.mouseY = pos.y;
       if (this.draggedItem) {
-        var index = this.draggedItem.index;
-        var type = this.draggedItem.type;
-        if (type === "points") {
-          let coords = this.convertXYtoViewPort(this.mouseX, this.mouseY);
+        let coords = this.convertXYtoViewPort(this.mouseX, this.mouseY);
+        coords.x = snapToGrip(coords.x, this.gridSnap) - this.gridSnap / 2;
+        coords.y = snapToGrip(coords.y, this.gridSnap);
 
-          coords.x = snapToGrip(coords.x, this.gridSnap) - this.gridSnap / 2;
-          coords.y = snapToGrip(coords.y, this.gridSnap);
-
-          links[this.draggedItem.linkIndex].points[
-            this.draggedItem.pointIndex
-          ].x =
-            coords.x;
-          links[this.draggedItem.linkIndex].points[
-            this.draggedItem.pointIndex
-          ].y =
-            coords.y;
-          this.updateLinksPositions();
-        } else {
-          let coords = this.convertXYtoViewPort(this.mouseX, this.mouseY);
-
-          coords.x = snapToGrip(coords.x, this.gridSnap) - this.gridSnap / 2;
-          coords.y = snapToGrip(coords.y, this.gridSnap);
-
-          this.model._model[type][index].x = coords.x - 30;
-          this.model._model[type][index].y = coords.y - 30;
-          this.updateLinksPositions();
-        }
+        const obj = this.model.findBy(this.draggedItem.type, this.draggedItem.id) 
+        obj.x = coords.x - this.initialDragX;
+        obj.y = coords.y - this.initialDragY;
       }
     },
 
     mouseUp() {
       this.draggedItem = undefined;
       this.newLink = undefined;
+      this.model.logChange()
+    },
+
+    mouseEnterPort(portId) {
+      if (this.newLink !== undefined) {
+        let port1 = this.$refs[`port-${this.newLink.startPortId}`][0]
+        let port2 = this.$refs[`port-${portId}`][0]
+        this.newLinkStroke = this.model.canConnect(port1.id, port2.id) ? "green" : "red"
+      }
+    },
+
+    mouseLeavePort(portId) {
+      this.newLinkStroke="black"
     },
 
     mouseUpPort(portId) {
-      var links = this.model._model.links;
-
-      if (this.draggedItem && this.draggedItem.type === "points") {
-        console.log(this.draggedItem);
-        var pointIndex = this.draggedItem.pointIndex;
-        var linkIndex = this.draggedItem.linkIndex;
-
-        if (this.$refs["port-" + portId][0].type === "in") {
-          var l = links[linkIndex].points.length;
-          links[linkIndex].points.splice(
-            pointIndex,
-            l - this.draggedItem.pointIndex
-          );
-        } else {
-          links[linkIndex].points.splice(0, pointIndex + 1);
-        }
-        this.updateLinksPositions();
-      }
-
       if (this.newLink !== undefined) {
-        var port1Id = this.newLink.startPortId;
-        var port2Id = portId;
 
-        var port1 = this.$refs["port-" + port1Id][0];
-        var port2 = this.$refs["port-" + port2Id][0];
+        let port1 = this.$refs[`port-${this.newLink.startPortId}`][0]
+        let port2 = this.$refs[`port-${portId}`][0]
 
-        if (port1.type === "in" && port2.type === "out") {
-          links.push({
-            id: generateId(),
-            from: port2.id,
-            to: port1.id,
-            positionFrom: {},
-            positionTo: {},
-            points: []
-          });
-        } else if (port2.type === "in" && port1.type === "out") {
-          links.push({
-            id: generateId(),
-            from: port1.id,
-            to: port2.id,
-            positionFrom: {},
-            positionTo: {},
-            points: []
-          });
-        } else {
-          console.warn("You must link one out port and one in port");
+        if (this.model.canConnect(port1.id, port2.id)) {
+          if (port1.direction === "in") this.model.addLink(port2.id, port1.id)
+          else this.model.addLink(port1.id, port2.id)
         }
-
-        this.model._model.links = links;
-
-        this.updateLinksPositions();
       }
-    },
-
-    startDragPoint(pointInfo) {
-      console.log("startDragPoint", pointInfo);
-      this.draggedItem = pointInfo;
     },
 
     startDragItem(item, x, y) {
@@ -344,19 +269,33 @@ export default {
       this.selectedItem = item;
       this.initialDragX = x;
       this.initialDragY = y;
+    },
+
+    handleKeyPressed(e) {
+      console.log(e)
+    },
+
+    undo(e) {
+      console.log("Undo")
+      this.model.undo()
+    },
+    
+    redo(e) {
+      console.log("Redo")
+      this.model.redo()
     }
   },
   computed: {
-    querySelector: function() {
-      return document.querySelector("#viewport");
-    }
+    newLinkPath() {
+      let start = this.getPortHandlePosition(this.newLink.startPortId)
+      let end = this.convertXYtoViewPort(this.mouseX, this.mouseY)
+      return curve(start.x, start.y, end.x, end.y)
+    },
+    
+
+
   },
 
-  watch: {
-    "model._model.links": function() {
-      this.updateLinksPositions();
-    }
-  }
 };
 </script>
 
@@ -364,6 +303,7 @@ export default {
 <style scoped>
   svg{
     user-select: none;
-    font-family: Helvetica;
+    /* font-family: "Helvetica"; */
+    font-family: "Segoe UI";
   }
 </style>
