@@ -1,60 +1,92 @@
 <template>
-  <g @mouseenter="enter" @mouseleave="leave" @mousedown="startDragNewLink" @mouseup="mouseup">
-    <svg :x="x-1" :y="y" >
-     
-      <polygon v-if="type === 'flow'" 
-        points="3,2 3,14 12,8" :fill="highlight ? color : 'none'" :stroke="color" stroke-width="2" stroke-linejoin="round" />
- 
-      <rect v-else-if="type === 'array'" x="0" y="0" width="12" height="12" :fill="highlight ? color : 'none'" :stroke="color" stroke-width="2" />
+  <g @mouseenter="enter" @mouseleave="leave" @mousedown="startDragNewLink" @mouseup="mouseup" @dblclick="dblclick">
 
-      <circle v-else r="6" cx="7" cy="7" :fill="highlight ? color : 'none'" :stroke="color" stroke-width="2" stroke-linejoin="round" />
+    <rect v-if="mode=='view' && highlight" :x="this.$el.getBBox().x" :y="this.$el.getBBox().y" :height="18*slots" :width="this.$el.getBBox().width" fill="url(#HighlightEffect)"/>
 
-    </svg>
-    <text 
-      v-show="mode == 'view'"
-      @dblclick="dblclick"
-      :x="direction == 'in' ? x + 16 : x - 4" :y="y + 13"
-      :text-anchor="direction == 'in' ? 'start' : 'end'"
-      font-size="10pt" fill="white" ref="text">{{name}}</text>
-    <foreignObject v-if="mode=='edit'" :width="bbox.width-15" :height="bbox.height" :x="bbox.x" :y="bbox.y"> 
-      <input @input="setTimeout(() => {mode='view'}, 2000)" @keyup.enter="mode='view'" v-model="name"/> 
-    </foreignObject>
-    <rect v-if="highlight" :x="bbox.x" :y="bbox.y" :height="bbox.height" :width="bbox.width" fill="#fff" fill-opacity="0.5"/>
+    <g ref="main">
+
+      <svg :x="x-1" :y="y" >
+      
+        <polygon v-if="type === 'flow'" 
+          points="3,1 3,15 13,9" :fill="connected ? color : 'none'" :stroke="color" stroke-width="2" stroke-linejoin="round" />
+  
+        <g v-else-if="type === 'array'">
+          <rect v-for="i in [0,1,2,3,5,6,7,8]" :key="i" :x="1 + (i % 3)*5" :y="1 + Math.floor(i / 3)*5" width="3" height="3" :fill="color"/>
+          <rect v-if="connected" x="6" y="6" width="3" height="3" :fill="color"/>
+        </g>
+
+        <circle v-else r="7" cx="8" cy="8" :fill="connected ? color : 'none'" :stroke="color" stroke-width="2" stroke-linejoin="round" />
+
+      </svg>
+
+      <text ref="name" fill="white" font-size="10pt" 
+        v-show="mode == 'view'"
+        :x="direction == 'in' ? x + 20 : x - 7" 
+        :y="slots == 1 ? y + 13 : y + 4 "
+        :text-anchor="direction == 'in' ? 'start' : 'end'">
+        {{subtype ? `[${subtype}] ` : "" + name}}
+      </text>
+      <foreignObject v-if="mode=='edit'" :width="width()" :height="36" :x="direction == 'in' ? x + 20 : x - 7"  :y="slots == 1 ? y + 13 : y + 4 "> 
+        <span ref="name_input" contentEditable="true" 
+          :class="`input input-name ${direction == 'in' ? 'left' : 'right'}`" 
+          @keydown.enter="rename($event.target.innerText.trim())" 
+          @keyup.escape="mode='view'" @blur="mode='view'">{{name}}</span> 
+      </foreignObject>
+
+      <foreignObject v-if="type == 'value' && direction == 'in' && !connected" :width="width()" :height="20" :x="x + 20" :y="y + 14">
+        <input v-if="!options" ref="value" :value="value" placeholder="value"
+          @input="setPortValue($event.target.value)" 
+          v-autowidth="{maxWidth: `${width()}px`, minWidth: '20px', comfortZone: 0}" />
+        <v-select v-else ref="value" :options="options" @input="setPortValue" :value="value"/>
+      </foreignObject> 
+    </g>
   </g>
 </template>
 <script>
+import vSelect from 'vue-select'
+
 export default {
   name: "DiagramPort",
-  props: ["id", "handlePos", "direction", "type", "subtype", "name", "nodeWidth", "nodeId", "editable"],
+  components: {vSelect},
+  props: ["model", "id", "handlePos", "direction", "type", "subtype", "name", "value", "nodeWidth", "nodeId", "connected", "options"],
   data() {
     return {
       highlight: false,
-      mode: "view"
+      mode: "view",
+      timeout: null
     };
   },
   computed: {
     color() {
       const pallete = { flow: "white", ref: "#00aeef", value: "#3cb878", binding: "#8560a8" } 
-      return (this.type === "array") ? pallete[this.subtype] : pallete[this.type] 
+      const color = (this.type === "array") ? pallete[this.subtype.split(".")[0]] : pallete[this.type] 
+      return color ? color : "#666"
     },
     x() {
-      return (this.direction === 'in') ? this.handlePos.x + 0 : (this.handlePos.x - 10)
+      return (this.direction === 'in') ? this.handlePos.x + 0 : (this.handlePos.x - 14)
     },
     y() {
       return this.handlePos.y - 9
     },
-    bbox() {
-      let text_width = this.$refs.text.getBBox().width
-      return {
-        y: this.y,
-        height: 16,
-        x: (this.direction === 'in') ? this.x - 1 : this.x - text_width - 3,
-        width: text_width + 15
-      }
+    editable() {
+      return this.type == "binding"
+    },
+    slots() {
+      if (this.can_change_subtype) return 2
+      if (this.type == "value" && this.direction == "in" && !this.connected) return 2
+      return 1
     }
   },
 
   methods: {
+    
+    width() {
+      let w = 50; //min
+      if (this.$refs.name) w = Math.max(w, this.$refs.name.getBBox().width + 20)
+      if (this.$refs.value) w = Math.max(w, this.$refs.value.getBoundingClientRect().width + 20)
+      return w
+    },
+
     mouseup() {
       this.$emit("mouseUpPort", this.id);
     },
@@ -65,18 +97,56 @@ export default {
     },
 
     leave() {
-      if (this.mode =="view") this.highlight=false;
+      this.highlight=false;
       this.$emit("mouseLeavePort", this.id);
     },
 
     dblclick(e) {
-      if (editable) mode='edit'
-      e.stopPropagation()
+      if (this.editable || true) {
+        this.mode='edit'
+        this.$nextTick(() => {
+          this.$refs.name_input.focus();
+		    });   
+      }
     },
 
     startDragNewLink() {
-      if (this.mode == "view") this.$emit("onStartDragNewLink", this.id);
+      if (this.mode == "view") this.$emit("onStartDragNewLink", this.id)
     },
+
+    rename(e) {
+      const port = this.model.findPort(this.id)
+      if (port) {
+        port.name = e
+        this.$emit("portRename", this.id, e)
+        this.mode='view'
+      } else console.log(`Port ${port_id} not found.`)
+    },
+
+    setPortValue(e) {
+      const port = this.model.findPort(this.id)
+      if (port) {
+        port.value = e
+        this.$emit("portValueUpdate", this.id, this.e)
+      } else console.log(`Port ${port_id} not found.`)      
+    }
   }
 };
 </script>
+
+<style scoped>
+
+.input.input-name {
+  overflow: hidden;
+  white-space: nowrap;
+  display: block;
+  font-family: "Segoe UI";
+  color: white;
+  font-size: 10pt;
+}
+
+.input.right {
+  text-align: right;
+}
+
+</style>

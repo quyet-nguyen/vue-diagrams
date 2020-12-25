@@ -8,7 +8,8 @@
       <g>
         <path
           :d="curve"
-          :style="largeStrokeStyle"
+          :stroke="selected ? '#e17e4e' : fill"
+          :stroke-opacity="selected || highlight ? 0.5 : 0"
           stroke-width="8"
           fill="none"
         />
@@ -28,21 +29,23 @@ import {curve} from "../SVGUtils.js"
 
 export default {
   name: "DiagramLink",
-  props: ["positionFrom", "positionTo", "id", "type"],
+  props: ["positionFrom", "positionTo", "id", "type", "selected"],
 
   data() {
     return {
-      largeStrokeStyle: "stroke:rgba(255,0,0,0.0);"
+      highlight: false 
     };
   },
   methods: {
     mouseEnter() {
-      this.largeStrokeStyle = "stroke:rgba(255,0,0,0.5);";
+      this.highlight = true
     },
     mouseLeave() {
-      this.largeStrokeStyle = "stroke:rgba(255,0,0,0.0);";
+      this.highlight = false
     },
-    mouseDown(pos) {},
+    mouseDown(pos) {
+      this.$emit("select", { type: "link", id: this.id} )
+    },
   },
   computed: {
     fill() {

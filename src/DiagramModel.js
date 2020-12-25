@@ -24,7 +24,8 @@ class DiagramModel {
     this._model = {
       nodes: {},
       links: {},
-      ports: {}
+      ports: {},
+      variables: {},
     };
     this.old = JSON.parse(JSON.stringify(this._model), jsondiffpatch.dateReviver);
     this.node_count = 0
@@ -53,14 +54,14 @@ class DiagramModel {
    * @param {Object} data Custom data
    * @return {Node} The node created
    */
-  addNode(type, title, x, y, width, height, subtype="", has_expressions=false, has_bindings=false, open_ended=false, data={}) {
+  addNode(type, title, x, y, subtype="", has_expressions=false, has_bindings=false, open_ended=false, data={}, logChange=true) {
     const newNode = {
       id : this.generateId("node"), inports: [], outports: [],
-      title, x, y, width, height, type, subtype, has_bindings, has_expressions, open_ended, data
+      title, x, y, type, subtype, has_bindings, has_expressions, open_ended, data
     };
     this._model.nodes[newNode.id] = newNode;
 
-    this.logChange()
+    if (logChange) this.logChange()
     return newNode;
   }
 
@@ -69,24 +70,24 @@ class DiagramModel {
    * @param {Integer} node_id The node id 
    * @param {String} name Port name
    * @param {String} direction "in" or "out"
-   * @param {String} type "flow", "value", "reference", "array"
+   * @param {String} type "flow", "value", "ref", "array"
    * @param {String} subtype subtype if have
    * @return {Object} The node created
    */
-  addPort(node_id, name, direction, type, subtype="") {
+  addPort(node_id, name, direction, type, subtype="", logChange=true) {
     const node = this._model.nodes[node_id]
     if (!node) {
       console.log(`Unable to find node ${node_id}`, this)
       return
     }
     const newPort = {
-      id : this.generateId("port"),
+      id : this.generateId("port"), links: [],
       node_id, name, direction, type, subtype
     }
     this._model.ports[newPort.id] = newPort;
     node[`${direction}ports`].push(newPort.id)
 
-    this.logChange()
+    if (logChange) this.logChange()
     return newPort
   }
 
@@ -95,29 +96,58 @@ class DiagramModel {
    * @param {Integer} from   Port id. Must be an out port
    * @param {Integer} to     Port id. Must be an in port
    */
-  addLink(from, to) {
-    const newLink = {id:this.generateId("link"), from, to}
-    this._model.links[newLink.id] = newLink
-    this.logChange()
-    return newLink
+  addLink(from, to, logChange=true) {
+    const fport = this.findPort(from)
+    const tport = this.findPort(to)
+    if (fport && tport)
+    {
+      const newLink = {id:this.generateId("link"), from, to}
+      this._model.links[newLink.id] = newLink
+      fport.links.push(newLink.id)
+      tport.links.push(newLink.id)
+      if (logChange) this.logChange()
+      return newLink
+    }
+    console.log(this, `Unable to find port ${fport ? to : from}`)
   }
 
-  deleteNode(node_id) {
-    node = this.findNode(node_id)
-    node.inports.forEach(port_id => this.deletePort(port_id));
+  delete(type, id) {
+    const fname = `delete${type.replace(/^\w/, (c) => c.toUpperCase())}`
+    if (this[fname]) this[fname](id)
+  }
+
+  deleteNode(node_id, logChange=true) {
+    const node = this.findNode(node_id)
+    if (!node) return console.log(`Node ${node_id} not found.`)
+    let ports = [...node.inports]
+    ports.forEach(port_id => this.deletePort(port_id, logChange=false))
+    ports = [...node.outports]
+    ports.forEach(port_id => this.deletePort(port_id, logChange=false))
     delete this._model.nodes[node_id]
-    this.logChange()
+    if (logChange) this.logChange()
   }
 
-  deletePort(port_id) {
+  deletePort(port_id, logChange=true) {
+    const port = this.findPort(port_id)
+    if (!port) return console.log(`Port ${port_id} not found.`)
+    const links = [...port.links]
+    links.forEach(link_id => this.deleteLink(link_id, logChange=false));
     delete this._model.ports[port_id]
-    this.getLinks(link => {link.from == port_id || link.to == port_id }).forEach(link => this.deleteLink(link.id) )
-    this.logChange()
+    if (logChange) this.logChange()
   }
 
-  deleteLink(link_id) {
+  deleteLink(link_id, logChange=true) {
+    const link = this.findLink(link_id)
+    let links = this.findPort(link.from).links
+    links.splice(links.indexOf(link_id), 1)
+    links = this.findPort(link.to).links
+    links.splice(links.indexOf(link_id), 1)
     delete this._model.links[link_id]
-    this.logChange()
+    if (logChange) this.logChange()
+  }
+
+  constructNode(schema) {
+    // Create nodes and port from a schema
   }
 
   getNodes(filters) {
@@ -141,19 +171,24 @@ class DiagramModel {
   findLink(id) { return this.findBy('link', id) }
 
   canConnect(id1, id2) {
-    let port1 = this.findPort(id1)
-    let port2 = this.findPort(id2)
 
-    if (port1.direction === port2.direction) return false
-    if (port1.direction != "in") {
-      let x = port1
-      port1 = port2
-      port2 = x
-    }
-    // TODO: Check more
-    // Flow can't have multiple outs
-    // 
-    return true
+    // Must be one in and one out
+    let from = this.findPort(id1)
+    let to = this.findPort(id2)
+    if (from.direction === to.direction) return false
+    if (from.direction != "out") { let x = from; from = to; to = x }
+    
+    // Flow: single out / multiple in 
+    // Other: multiple out / single in
+    if (from.type == 'flow' && from.links.length > 0) return false
+    if (from.type != 'flow' && to.links.length > 0) return false
+
+    // Only to can be binding, binding can connect to everything except flow
+    if (from.type == 'binding') return false
+    if (to.type == 'binding') return from.type != 'flow'
+
+    // Other than binding, in and out must match both type and subtype
+    return from.type == to.type && from.subtype == to.subtype
   }
 
   logChange() {
@@ -172,6 +207,7 @@ class DiagramModel {
       jsondiffpatch.unpatch(this._model, delta)
       jsondiffpatch.unpatch(this.old, delta)
       this.redos.push(delta)
+      return delta
     } 
   }
 
@@ -181,6 +217,7 @@ class DiagramModel {
       jsondiffpatch.patch(this._model, delta)
       jsondiffpatch.patch(this.old, delta)
       this.undos.push(delta)
+      return delta
     }    
   }
 
