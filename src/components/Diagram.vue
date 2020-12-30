@@ -109,8 +109,8 @@
               @mouseUpPort="mouseUpPort"
               @mouseEnterPort="mouseEnterPort"
               @mouseLeavePort="mouseLeavePort"
-              @portRename="portRename"
-              @portValueUpdate="portValueUpdate"
+              @portRename="autoFit(node)"
+              @portValueUpdate="autoFit(node)"
             />
           </DiagramNode>
         </g>
@@ -184,9 +184,9 @@ export default {
   components: { DiagramNode, DiagramLink, DiagramPort, SvgPanZoom },
 
   methods: {
-    portRename() {},
+    // portRename() {},
 
-    portValueUpdate() {},
+    // portValueUpdate() {},
 
     convertXYtoViewPort(x, y) {
       let rootelt = document.getElementById("svgroot2");
@@ -338,18 +338,18 @@ export default {
     },
 
     select(item) {
-      console.log("xxxxxxxxxxx");
       this.selectedItem = item;
     },
 
     async undo(e) {
       const delta = this.model.undo();
       console.log("Undo", JSON.stringify(delta));
-      if (delta.nodes) {
+      if (delta && delta.nodes) {
         setTimeout(() => {
           this.$forceUpdate();
         }, 100);
         await this.$nextTick();
+        console.log("Nodes: ", Object.keys(delta.nodes))
         Object.keys(delta.nodes).forEach(node_id =>
           this.autoFit(this.model.findNode(node_id))
         );
@@ -395,23 +395,22 @@ export default {
     });
   },
 
-  watch: {
-    // "model._model": function() {
-    //   this.model.getNodes().forEach(node => {
-    //     this.autoFit(node)
-    //   })
-    // }
+  // watch: {
+  //   // "model._model": function() {
+  //   //   this.model.getNodes().forEach(node => {
+  //   //     this.autoFit(node)
+  //   //   })
+  //   // }
 
-    "model._model": {
-      deep: true,
-      handler() {
-        console.log("model._model change");
-        this.model.getNodes().forEach(node => {
-          this.autoFit(node);
-        });
-      }
-    }
-  }
+  //   "model._model": {
+  //     // deep: true,
+  //     handler() {
+  //       this.model.getNodes().forEach(node => {
+  //         this.autoFit(node);
+  //       });
+  //     }
+  //   }
+  // }
 };
 </script>
 

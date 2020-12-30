@@ -93,7 +93,6 @@
     "vue-loader": "^13.6.2",
     "vue-template-compiler": "^2.5.13"
   },
-  
   "lint-staged": {
     "*.{js,vue}": [
       "eslint --fix",

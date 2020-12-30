@@ -37,15 +37,12 @@ export default {
   },
   methods: {
     mouseEnter() {
-      console.log("xxxxxxxxxxx");
       this.highlight = true;
     },
     mouseLeave() {
-      console.log("xxxxxxxxxxx");
       this.highlight = false;
     },
     mouseDown(pos) {
-      console.log("xxxxxxxxxxx");
       this.$emit("select", { type: "link", id: this.id });
     }
   },

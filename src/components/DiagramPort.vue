@@ -26,14 +26,14 @@
         :text-anchor="direction == 'in' ? 'start' : 'end'">
         {{subtype ? `[${subtype}] ` : "" + name}}
       </text>
-      <foreignObject v-if="mode=='edit'" :width="width()" :height="36" :x="direction == 'in' ? x + 20 : x - 7"  :y="slots == 1 ? y + 13 : y + 4 "> 
+      <foreignObject v-if="mode=='edit'" :width="$refs.name.getBBox().width+20" :height="36" :x="$refs.name.getBBox().x + (direction == 'in' ? 1 : -21)"  :y="slots == 1 ? y : y - 9 "> 
         <span ref="name_input" contentEditable="true" 
           :class="`input input-name ${direction == 'in' ? 'left' : 'right'}`" 
           @keydown.enter="rename($event.target.innerText.trim())" 
           @keyup.escape="mode='view'" @blur="mode='view'">{{name}}</span> 
       </foreignObject>
 
-      <foreignObject v-if="type == 'value' && direction == 'in' && !connected" :width="width()" :height="20" :x="x + 20" :y="y + 14">
+      <foreignObject v-if="type == 'value' && direction == 'in' && !connected" :width="width()" :height="20" :x="x + 20" :y="y + 8">
         <input v-if="!options" ref="value" :value="value" placeholder="value"
           @input="setPortValue($event.target.value)" 
           v-autowidth="{maxWidth: `${width()}px`, minWidth: '20px', comfortZone: 0}" />
@@ -140,7 +140,7 @@ export default {
   overflow: hidden;
   white-space: nowrap;
   display: block;
-  font-family: "Segoe UI";
+  font-family: "Helvetica";
   color: white;
   font-size: 10pt;
 }
