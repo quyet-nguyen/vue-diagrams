@@ -24,8 +24,7 @@
   </g>
 </template>
 <script>
-
-import {curve} from "../SVGUtils.js"
+import { curve } from "../SVGUtils.js";
 
 export default {
   name: "DiagramLink",
@@ -33,26 +32,39 @@ export default {
 
   data() {
     return {
-      highlight: false 
+      highlight: false
     };
   },
   methods: {
     mouseEnter() {
-      this.highlight = true
+      console.log("xxxxxxxxxxx");
+      this.highlight = true;
     },
     mouseLeave() {
-      this.highlight = false
+      console.log("xxxxxxxxxxx");
+      this.highlight = false;
     },
     mouseDown(pos) {
-      this.$emit("select", { type: "link", id: this.id} )
-    },
+      console.log("xxxxxxxxxxx");
+      this.$emit("select", { type: "link", id: this.id });
+    }
   },
   computed: {
     fill() {
-      return { flow: "#555", ref: "#00aeef", value: "#3cb878", binding: "#8560a8" }[this.type] 
+      return {
+        flow: "#555",
+        ref: "#00aeef",
+        value: "#3cb878",
+        binding: "#8560a8"
+      }[this.type];
     },
     curve() {
-      return curve(this.positionFrom.x, this.positionFrom.y, this.positionTo.x, this.positionTo.y)
+      return curve(
+        this.positionFrom.x,
+        this.positionFrom.y,
+        this.positionTo.x,
+        this.positionTo.y
+      );
     }
   }
 };

@@ -1,5 +1,6 @@
 import Diagram from "./components/Diagram";
 import DiagramModel from "./DiagramModel";
+import ActionControl from "./components/ActionControl";
 
 const LibraryModule = {
   Diagram,
@@ -7,6 +8,7 @@ const LibraryModule = {
   install(Vue) {
     // Register components with vue
     Vue.component("diagram", Diagram);
+    Vue.component("action-control", ActionControl);
   }
 };
 

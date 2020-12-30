@@ -48,7 +48,21 @@
 <script>
 export default {
   name: "DiagramNode",
-  props: ["id", "title", "x", "y", "type", "subtype", "width", "height", "selected", "has_bindings", "has_expressions", "open_ended", "expression"],
+  props: [
+    "id",
+    "title",
+    "x",
+    "y",
+    "type",
+    "subtype",
+    "width",
+    "height",
+    "selected",
+    "has_bindings",
+    "has_expressions",
+    "open_ended",
+    "expression"
+  ],
   data() {
     return {
       nodeStrokeWidth: 0,
@@ -60,14 +74,22 @@ export default {
 
   computed: {
     color() {
-      return { trigger: "#790000", flow: "#fbaf5d", expression: "#7b0046", utility: "#3cb878", action: "#005b7f",  object: "#555"}[this.type]
-    } 
+      return {
+        trigger: "#790000",
+        flow: "#fbaf5d",
+        expression: "#7b0046",
+        utility: "#3cb878",
+        action: "#005b7f",
+        object: "#555",
+        method: "red",
+        class_method: "yellow"
+      }[this.type];
+    }
   },
 
   methods: {
-
     getTextWidth() {
-      return this.$refs.text.getBBox().width
+      return this.$refs.text.getBBox().width;
     },
 
     mouseDown(event) {
@@ -80,9 +102,8 @@ export default {
     },
 
     addBinding(e) {
-      this.$emit("addBinding", this.id)
+      this.$emit("addBinding", this.id);
     }
-
   }
 };
 </script>

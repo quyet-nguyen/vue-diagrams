@@ -2,9 +2,9 @@
   <div tabindex="-1" @keyup.ctrl.z.exact="undo" @keyup.ctrl.shift.z.exact="redo" @keyup.delete="deleteSelected">
     <SvgPanZoom
         :style="{ width: width + 'px', height: height + 'px', border:'1px solid black'}"
-        xmlns="http://www.w3.org/2000/svg"
         :zoomEnabled="zoomEnabled"
         id="svgroot"
+        xmlns="http://www.w3.org/2000/svg"
         :panEnabled="panEnabled"
         :controlIconsEnabled="true"
         minZoom="0.6" maxZoom="1.2"
@@ -127,7 +127,7 @@ import DiagramNode from "./DiagramNode";
 import DiagramLink from "./DiagramLink";
 import DiagramPort from "./DiagramPort";
 
-import {curve} from "../SVGUtils"
+import { curve } from "../SVGUtils";
 
 var generateId = function() {
   return Math.trunc(Math.random() * 1000);
@@ -184,6 +184,10 @@ export default {
   components: { DiagramNode, DiagramLink, DiagramPort, SvgPanZoom },
 
   methods: {
+    portRename() {},
+
+    portValueUpdate() {},
+
     convertXYtoViewPort(x, y) {
       let rootelt = document.getElementById("svgroot2");
       let rec = document.getElementById("viewport");
@@ -211,19 +215,18 @@ export default {
       };
     },
 
-    getPortHandlePosition(portId, relative=false) {
-      const port = this.model.findPort(portId)
+    getPortHandlePosition(portId, relative = false) {
+      const port = this.model.findPort(portId);
       if (port) {
-        const node = this.model.findNode(port.node_id)
-        const index = node[`${port.direction}ports`].indexOf(port.id)
-        
-        const pos = { 
-          x: port.direction === "in" ? 10 : node.width - 1, 
-          y: index*36 + (node.has_expressions ? 72 : 0) + 36 + 4 + 36/2
-        };
-        if (relative) return pos
-        else return {x: pos.x + node.x, y: pos.y + node.y}
+        const node = this.model.findNode(port.node_id);
+        const index = node[`${port.direction}ports`].indexOf(port.id);
 
+        const pos = {
+          x: port.direction === "in" ? 10 : node.width - 1,
+          y: index * 36 + (node.has_expressions ? 72 : 0) + 36 + 4 + 36 / 2
+        };
+        if (relative) return pos;
+        else return { x: pos.x + node.x, y: pos.y + node.y };
       } else {
         console.warn(
           `port "${portId}" not found. you must call this method after the first render`
@@ -233,23 +236,40 @@ export default {
     },
 
     autoFit(node) {
-      var lwidth = 0
+      var lwidth = 0;
       node.inports.forEach(pid => {
-        lwidth = Math.max(lwidth, this.$refs[`port-${pid}`][0].$el.getBBox().width)
-      })
-      var rwidth = 0
+        lwidth = Math.max(
+          lwidth,
+          this.$refs[`port-${pid}`][0].$el.getBBox().width
+        );
+      });
+      var rwidth = 0;
       node.outports.forEach(pid => {
-        rwidth = Math.max(rwidth, this.$refs[`port-${pid}`][0].$el.getBBox().width)
-      })
-      const minwidth = 80 + (node.has_bindings ? 120 : 0) + (node.open_ended ? 180 : 0) 
-      node.width = snapToGrip(Math.max(this.$refs[`node-${node.id}`][0].getTextWidth() + 10, lwidth + rwidth + 30, minwidth), this.gridSnap) + this.gridSnap
-      node.height = 32 + 4 + //Titlebar 
+        rwidth = Math.max(
+          rwidth,
+          this.$refs[`port-${pid}`][0].$el.getBBox().width
+        );
+      });
+      const minwidth =
+        80 + (node.has_bindings ? 120 : 0) + (node.open_ended ? 180 : 0);
+      node.width =
+        snapToGrip(
+          Math.max(
+            this.$refs[`node-${node.id}`][0].getTextWidth() + 10,
+            lwidth + rwidth + 30,
+            minwidth
+          ),
+          this.gridSnap
+        ) + this.gridSnap;
+      node.height =
+        32 +
+        4 + //Titlebar
         (node.has_expressions ? 72 : 0) + //Expression
-        Math.max(node.inports.length, node.outports.length) * 36 + //Nodes 
-        (node.has_bindings || node.open_ended ? 36 : 0)
+        Math.max(node.inports.length, node.outports.length) * 36 + //Nodes
+        (node.has_bindings || node.open_ended ? 36 : 0);
       // Auto fit to grid
-      node.x = snapToGrip(node.x, this.gridSnap) - 4
-      node.y = snapToGrip(node.y, this.gridSnap) - 4
+      node.x = snapToGrip(node.x, this.gridSnap) - 4;
+      node.y = snapToGrip(node.y, this.gridSnap) - 4;
     },
 
     mouseMove(pos) {
@@ -257,7 +277,10 @@ export default {
       this.mouseY = pos.y;
       if (this.draggedItem) {
         let coords = this.convertXYtoViewPort(this.mouseX, this.mouseY);
-        const obj = this.model.findBy(this.draggedItem.type, this.draggedItem.id) 
+        const obj = this.model.findBy(
+          this.draggedItem.type,
+          this.draggedItem.id
+        );
         obj.x = snapToGrip(coords.x - this.initialDragX, this.gridSnap) - 4;
         obj.y = snapToGrip(coords.y - this.initialDragY, this.gridSnap) - 4;
       }
@@ -266,30 +289,31 @@ export default {
     mouseUp() {
       this.draggedItem = undefined;
       this.newLink = undefined;
-      this.model.logChange()
+      this.model.logChange();
     },
 
     mouseEnterPort(portId) {
       if (this.newLink !== undefined) {
-        let port1 = this.$refs[`port-${this.newLink.startPortId}`][0]
-        let port2 = this.$refs[`port-${portId}`][0]
-        this.newLinkStroke = this.model.canConnect(port1.id, port2.id) ? "green" : "red"
+        let port1 = this.$refs[`port-${this.newLink.startPortId}`][0];
+        let port2 = this.$refs[`port-${portId}`][0];
+        this.newLinkStroke = this.model.canConnect(port1.id, port2.id)
+          ? "green"
+          : "red";
       }
     },
 
     mouseLeavePort(portId) {
-      this.newLinkStroke="black"
+      this.newLinkStroke = "black";
     },
 
     mouseUpPort(portId) {
       if (this.newLink !== undefined) {
-
-        let port1 = this.$refs[`port-${this.newLink.startPortId}`][0]
-        let port2 = this.$refs[`port-${portId}`][0]
+        let port1 = this.$refs[`port-${this.newLink.startPortId}`][0];
+        let port2 = this.$refs[`port-${portId}`][0];
 
         if (this.model.canConnect(port1.id, port2.id)) {
-          if (port1.direction === "in") this.model.addLink(port2.id, port1.id)
-          else this.model.addLink(port1.id, port2.id)
+          if (port1.direction === "in") this.model.addLink(port2.id, port1.id);
+          else this.model.addLink(port1.id, port2.id);
         }
       }
     },
@@ -299,78 +323,95 @@ export default {
       this.draggedItem = item;
       this.selectedItem = item;
       // TODO: need to get calculate pan and zoom level
-      const cords = this.convertXYtoViewPort(x,y)
+      const cords = this.convertXYtoViewPort(x, y);
       this.initialDragX = cords.x - item.x;
       this.initialDragY = cords.y - item.y;
     },
 
     async addBinding(node_id) {
-      this.model.addPort(node_id, "New Binding", "in", "binding")
-      setTimeout(() => {this.$forceUpdate()}, 100)
-      await this.$nextTick()
-      this.autoFit(this.model.findNode(node_id))
+      this.model.addPort(node_id, "New Binding", "in", "binding");
+      setTimeout(() => {
+        this.$forceUpdate();
+      }, 100);
+      await this.$nextTick();
+      this.autoFit(this.model.findNode(node_id));
     },
 
     select(item) {
+      console.log("xxxxxxxxxxx");
       this.selectedItem = item;
     },
 
     async undo(e) {
-      const delta = this.model.undo()
-      console.log("Undo", JSON.stringify(delta))
-      if (delta.nodes){
-        setTimeout(() => {this.$forceUpdate()}, 100)
-        await this.$nextTick()
-        Object.keys(delta.nodes).forEach(node_id => this.autoFit(this.model.findNode(node_id)))
+      const delta = this.model.undo();
+      console.log("Undo", JSON.stringify(delta));
+      if (delta.nodes) {
+        setTimeout(() => {
+          this.$forceUpdate();
+        }, 100);
+        await this.$nextTick();
+        Object.keys(delta.nodes).forEach(node_id =>
+          this.autoFit(this.model.findNode(node_id))
+        );
       }
     },
-    
+
     async redo(e) {
-      const delta = this.model.redo()
-      console.log("Undo", JSON.stringify(delta))
-      if (delta && delta.nodes){
-        setTimeout(() => {this.$forceUpdate()}, 100)
-        await this.$nextTick()
+      const delta = this.model.redo();
+      console.log("Undo", JSON.stringify(delta));
+      if (delta && delta.nodes) {
+        setTimeout(() => {
+          this.$forceUpdate();
+        }, 100);
+        await this.$nextTick();
         Object.keys(delta.nodes).forEach(node_id => {
-          this.autoFit(this.model.findNode(node_id))
-        })
+          this.autoFit(this.model.findNode(node_id));
+        });
       }
     },
 
     deleteSelected(e) {
       if (this.selectedItem) {
-        this.model.delete(this.selectedItem.type, this.selectedItem.id)
+        this.model.delete(this.selectedItem.type, this.selectedItem.id);
       }
-    },
-
+    }
   },
   computed: {
     newLinkPath() {
-      let start = this.getPortHandlePosition(this.newLink.startPortId)
-      let end = this.convertXYtoViewPort(this.mouseX, this.mouseY)
-      const port = this.model.findPort(this.newLink.startPortId)
+      let start = this.getPortHandlePosition(this.newLink.startPortId);
+      let end = this.convertXYtoViewPort(this.mouseX, this.mouseY);
+      const port = this.model.findPort(this.newLink.startPortId);
       if (port.direction === "out")
-        return curve(start.x, start.y, end.x, end.y)
-      else return curve(end.x, end.y, start.x, start.y)
-    },
+        return curve(start.x, start.y, end.x, end.y);
+      else return curve(end.x, end.y, start.x, start.y);
+    }
   },
 
   mounted() {
-      this.$nextTick(() => {
-        this.model.getNodes().forEach(node => {
-          this.autoFit(node)
-        })
-      });    
+    this.$nextTick(() => {
+      this.model.getNodes().forEach(node => {
+        this.autoFit(node);
+      });
+    });
   },
 
   watch: {
-    "model._model": function() {
-      this.model.getNodes().forEach(node => {
-        this.autoFit(node)
-      })
+    // "model._model": function() {
+    //   this.model.getNodes().forEach(node => {
+    //     this.autoFit(node)
+    //   })
+    // }
+
+    "model._model": {
+      deep: true,
+      handler() {
+        console.log("model._model change");
+        this.model.getNodes().forEach(node => {
+          this.autoFit(node);
+        });
+      }
     }
   }
-
 };
 </script>
 
